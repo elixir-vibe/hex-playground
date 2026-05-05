@@ -30,6 +30,8 @@ https://repo.hex.pm/tarballs/<name>-<version>.tar
 ```
 
 It prefers `latest_stable_version` and falls back to `latest_version`.
+Tarballs are unpacked with `hex_core` by default. A shell `tar` fallback is
+available with `--backend tar`.
 
 ## Corpus stats
 

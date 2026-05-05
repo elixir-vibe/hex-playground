@@ -1,5 +1,5 @@
 #!/usr/bin/env elixir
-Mix.install([{:jason, "~> 1.4"}])
+Mix.install([{:jason, "~> 1.4"}, {:hex_core, "~> 0.15"}])
 
 defmodule HexPlayground.FetchTopHex do
   @hex_api "https://hex.pm/api/packages"
@@ -47,7 +47,8 @@ defmodule HexPlayground.FetchTopHex do
           tmp: :string,
           concurrency: :integer,
           timeout: :integer,
-          force: :boolean
+          force: :boolean,
+          backend: :string
         ]
       )
 
@@ -63,7 +64,8 @@ defmodule HexPlayground.FetchTopHex do
       tmp: expand_path(Keyword.get(opts, :tmp, "tmp"), root),
       concurrency: Keyword.get(opts, :concurrency, 8),
       timeout: Keyword.get(opts, :timeout, 120_000),
-      force: Keyword.get(opts, :force, false)
+      force: Keyword.get(opts, :force, false),
+      backend: Keyword.get(opts, :backend, "hex_core")
     }
   end
 
@@ -97,7 +99,7 @@ defmodule HexPlayground.FetchTopHex do
     else
       File.rm_rf!(target_dir)
       download_tarball!(name, version, tarball)
-      extract_tarball!(tarball, target_dir, opts.tmp, slug)
+      extract_tarball!(tarball, target_dir, opts.tmp, slug, opts.backend)
       ok_entry(pkg, version, target_dir, tarball, "fetched")
     end
   rescue
@@ -133,7 +135,17 @@ defmodule HexPlayground.FetchTopHex do
     run!("curl", ["-fL", "--retry", "3", "--retry-delay", "1", "-o", tarball, url])
   end
 
-  defp extract_tarball!(tarball, target_dir, tmp_root, slug) do
+  defp extract_tarball!(tarball, target_dir, _tmp_root, _slug, "hex_core") do
+    tarball
+    |> File.read!()
+    |> :hex_tarball.unpack(:memory)
+    |> case do
+      {:ok, %{contents: contents}} -> write_contents!(contents, target_dir)
+      {:error, reason} -> raise("hex_core failed to unpack #{tarball}: #{inspect(reason)}")
+    end
+  end
+
+  defp extract_tarball!(tarball, target_dir, tmp_root, slug, "tar") do
     tmp_dir = Path.join(tmp_root, slug)
     File.rm_rf!(tmp_dir)
     File.mkdir_p!(tmp_dir)
@@ -150,6 +162,31 @@ defmodule HexPlayground.FetchTopHex do
     end
 
     File.rm_rf!(tmp_dir)
+  end
+
+  defp extract_tarball!(_tarball, _target_dir, _tmp_root, _slug, backend) do
+    raise("unknown backend #{inspect(backend)}; expected hex_core or tar")
+  end
+
+  defp write_contents!(contents, target_dir) do
+    File.mkdir_p!(target_dir)
+
+    Enum.each(contents, fn {path, content} ->
+      path = path |> to_string() |> safe_relative_path!()
+      output = Path.join(target_dir, path)
+      File.mkdir_p!(Path.dirname(output))
+      File.write!(output, content)
+    end)
+  end
+
+  defp safe_relative_path!(path) do
+    parts = Path.split(path)
+
+    if Path.type(path) != :relative or ".." in parts or parts == [] do
+      raise("unsafe package path #{inspect(path)}")
+    end
+
+    Path.join(parts)
   end
 
   defp get_json(url) do
