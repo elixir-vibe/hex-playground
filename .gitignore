@@ -1,0 +1,21 @@
+# Downloaded Hex package corpus
+sources/
+tarballs/
+manifest.json
+
+# Tool outputs
+runs/
+tmp/
+*.tar
+*.log
+*.ndjson
+
+# Elixir generated artifacts
+_build/
+deps/
+.mix/
+.elixir_ls/
+
+# macOS/editor noise
+.DS_Store
+*.swp
