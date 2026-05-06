@@ -15,6 +15,7 @@ _build/
 deps/
 .mix/
 .elixir_ls/
+/hex_playground
 
 # macOS/editor noise
 .DS_Store
